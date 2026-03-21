@@ -11,7 +11,8 @@
     "demo": "node demo.js",
     "demo:motion": "node demo.js --motion",
     "demo:image": "node demo.js --image",
-    "demo:monitor": "node demo.js --monitor"
+    "demo:monitor": "node demo.js --monitor",
+    "demo:web": "node demo-frame-web.js"
   },
   "keywords": [
     "paa3905",
@@ -24,7 +25,11 @@
   "author": "Generated from Arduino library by Simon D. Levy",
   "license": "MIT",
   "dependencies": {
-    "@eeemarv/io-spi": "^1.0.0"
+    "@eeemarv/io-spi": "^0.2.8"
+  },
+  "devDependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAA3905 Real-time Frame Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .content {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .frame-section {
+            flex: 1;
+            min-width: 400px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .stats-section {
+            flex: 1;
+            min-width: 300px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .canvas-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #frameCanvas {
+            border: 2px solid #444;
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        .controls {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .control-group {
+            margin: 10px 0;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #444;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .connected { background-color: #0a5d0a; }
+        .disconnected { background-color: #5d0a0a; }
+        .error { background-color: #5d2a0a; }
+        
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #005999; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .frame-info {
+            font-family: monospace;
+            font-size: 12px;
+            color: #ccc;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 PAA3905 Real-time Frame Viewer</h1>
+            <p>Live infrared imaging from PAA3905 optical flow sensor</p>
+        </div>
+        
+        <div class="content">
+            <div class="frame-section">
+                <h3>📷 Live Frame (35×35 pixels)</h3>
+                
+                <div class="status" id="connectionStatus">Connecting...</div>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="scaleSlider">Canvas Scale: <span id="scaleValue">8</span>x</label>
+                        <input type="range" id="scaleSlider" min="2" max="20" value="8">
+                    </div>
+                    <div class="control-group">
+                        <label for="thresholdSlider">Binary Threshold: <span id="thresholdValue">128</span></label>
+                        <input type="range" id="thresholdSlider" min="0" max="255" value="128">
+                    </div>
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="binaryMode"> Binary Mode
+                        </label>
+                        <label>
+                            <input type="checkbox" id="autoContrast"> Auto Contrast
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="canvas-container">
+                    <canvas id="frameCanvas" width="280" height="280"></canvas>
+                    <div class="frame-info" id="frameInfo">Waiting for frame data...</div>
+                </div>
+            </div>
+            
+            <div class="stats-section">
+                <h3>📊 Statistics</h3>
+                
+                <div id="frameStats">
+                    <div class="stat-item">
+                        <span>Frame Number:</span>
+                        <span id="frameNumber">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>FPS:</span>
+                        <span id="fps">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Capture Time:</span>
+                        <span id="captureTime">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Min Pixel:</span>
+                        <span id="minPixel">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Max Pixel:</span>
+                        <span id="maxPixel">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Average Pixel:</span>
+                        <span id="avgPixel">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Dynamic Range:</span>
+                        <span id="dynamicRange">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Last Update:</span>
+                        <span id="lastUpdate">-</span>
+                    </div>
+                </div>
+                
+                <h4>🎯 Pixel Inspector</h4>
+                <div id="pixelInspector">
+                    <div class="stat-item">
+                        <span>Mouse Position:</span>
+                        <span id="mousePos">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Pixel Value:</span>
+                        <span id="pixelValue">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Global variables
+        let socket = null;
+        let canvas = null;
+        let ctx = null;
+        let frameHistory = [];
+        let lastFrameTime = 0;
+        let currentFrame = null;
+        
+        // UI elements
+        const elements = {
+            connectionStatus: document.getElementById('connectionStatus'),
+            frameCanvas: document.getElementById('frameCanvas'),
+            scaleSlider: document.getElementById('scaleSlider'),
+            scaleValue: document.getElementById('scaleValue'),
+            thresholdSlider: document.getElementById('thresholdSlider'),
+            thresholdValue: document.getElementById('thresholdValue'),
+            binaryMode: document.getElementById('binaryMode'),
+            autoContrast: document.getElementById('autoContrast'),
+            frameInfo: document.getElementById('frameInfo'),
+            frameNumber: document.getElementById('frameNumber'),
+            fps: document.getElementById('fps'),
+            captureTime: document.getElementById('captureTime'),
+            minPixel: document.getElementById('minPixel'),
+            maxPixel: document.getElementById('maxPixel'),
+            avgPixel: document.getElementById('avgPixel'),
+            dynamicRange: document.getElementById('dynamicRange'),
+            lastUpdate: document.getElementById('lastUpdate'),
+            mousePos: document.getElementById('mousePos'),
+            pixelValue: document.getElementById('pixelValue')
+        };
+        
+        // Initialize
+        function init() {
+            canvas = elements.frameCanvas;
+            ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false; // Pixelated rendering
+            
+            setupEventListeners();
+            connectSocket();
+        }
+        
+        // Setup UI event listeners
+        function setupEventListeners() {
+            // Scale control
+            elements.scaleSlider.addEventListener('input', function() {
+                const scale = parseInt(this.value);
+                elements.scaleValue.textContent = scale;
+                updateCanvasSize(scale);
+                redrawFrame();
+            });
+            
+            // Threshold control
+            elements.thresholdSlider.addEventListener('input', function() {
+                const threshold = parseInt(this.value);
+                elements.thresholdValue.textContent = threshold;
+                redrawFrame();
+            });
+            
+            // Rendering mode controls
+            elements.binaryMode.addEventListener('change', redrawFrame);
+            elements.autoContrast.addEventListener('change', redrawFrame);
+            
+            // Mouse tracking for pixel inspection
+            canvas.addEventListener('mousemove', function(event) {
+                if (!currentFrame) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor((event.clientX - rect.left) / (canvas.width / 35));
+                const y = Math.floor((event.clientY - rect.top) / (canvas.height / 35));
+                
+                if (x >= 0 && x < 35 && y >= 0 && y < 35) {
+                    const pixelIndex = y * 35 + x;
+                    const pixelValue = currentFrame.pixels[pixelIndex];
+                    
+                    elements.mousePos.textContent = `(${x}, ${y})`;
+                    elements.pixelValue.textContent = pixelValue;
+                } else {
+                    elements.mousePos.textContent = '-';
+                    elements.pixelValue.textContent = '-';
+                }
+            });
+        }
+        
+        // Update canvas size based on scale
+        function updateCanvasSize(scale) {
+            canvas.width = 35 * scale;
+            canvas.height = 35 * scale;
+            ctx.imageSmoothingEnabled = false;
+        }
+        
+        // Connect to Socket.IO server
+        function connectSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                elements.connectionStatus.textContent = '✅ Connected';
+                elements.connectionStatus.className = 'status connected';
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                elements.connectionStatus.textContent = '❌ Disconnected';
+                elements.connectionStatus.className = 'status disconnected';
+            });
+            
+            socket.on('frame-data', function(frameData) {
+                currentFrame = frameData;
+                updateFrameDisplay(frameData);
+                updateStatistics(frameData);
+            });
+            
+            socket.on('error', function(error) {
+                console.error('Socket error:', error);
+                elements.connectionStatus.textContent = `❌ Error: ${error}`;
+                elements.connectionStatus.className = 'status error';
+            });
+        }
+        
+        // Update frame display
+        function updateFrameDisplay(frameData) {
+            redrawFrame();
+            
+            // Update frame info
+            elements.frameInfo.textContent = 
+                `Frame ${frameData.frameNumber} | ${frameData.width}×${frameData.height} pixels | ${frameData.captureTime}ms`;
+        }
+        
+        // Redraw the current frame with current settings
+        function redrawFrame() {
+            if (!currentFrame || !ctx) return;
+            
+            const scale = parseInt(elements.scaleSlider.value);
+            const threshold = parseInt(elements.thresholdSlider.value);
+            const binaryMode = elements.binaryMode.checked;
+            const autoContrast = elements.autoContrast.checked;
+            
+            // Clear canvas
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate contrast adjustment
+            let minValue = currentFrame.statistics.min;
+            let maxValue = currentFrame.statistics.max;
+            
+            if (autoContrast && maxValue > minValue) {
+                // Stretch contrast to full range
+            } else {
+                minValue = 0;
+                maxValue = 255;
+            }
+            
+            // Draw pixels
+            for (let y = 0; y < 35; y++) {
+                for (let x = 0; x < 35; x++) {
+                    const pixelIndex = y * 35 + x;
+                    let pixelValue = currentFrame.pixels[pixelIndex];
+                    
+                    // Apply contrast adjustment
+                    if (autoContrast && maxValue > minValue) {
+                        pixelValue = ((pixelValue - minValue) / (maxValue - minValue)) * 255;
+                        pixelValue = Math.max(0, Math.min(255, pixelValue));
+                    }
+                    
+                    // Apply binary threshold if enabled
+                    if (binaryMode) {
+                        pixelValue = pixelValue > threshold ? 255 : 0;
+                    }
+                    
+                    // Convert to grayscale color
+                    const gray = Math.floor(pixelValue);
+                    ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+                    
+                    // Draw pixel as rectangle
+                    ctx.fillRect(x * scale, y * scale, scale, scale);
+                }
+            }
+        }
+        
+        // Update statistics display
+        function updateStatistics(frameData) {
+            // Calculate FPS
+            const now = Date.now();
+            if (lastFrameTime > 0) {
+                frameHistory.push(now - lastFrameTime);
+                if (frameHistory.length > 30) frameHistory.shift(); // Keep last 30 frames
+                
+                const avgInterval = frameHistory.reduce((sum, interval) => sum + interval, 0) / frameHistory.length;
+                const fps = (1000 / avgInterval).toFixed(1);
+                elements.fps.textContent = `${fps} fps`;
+            }
+            lastFrameTime = now;
+            
+            // Update frame statistics
+            elements.frameNumber.textContent = frameData.frameNumber;
+            elements.captureTime.textContent = `${frameData.captureTime}ms`;
+            elements.minPixel.textContent = frameData.statistics.min;
+            elements.maxPixel.textContent = frameData.statistics.max;
+            elements.avgPixel.textContent = frameData.statistics.average.toFixed(1);
+            elements.dynamicRange.textContent = frameData.statistics.max - frameData.statistics.min;
+            elements.lastUpdate.textContent = new Date(frameData.timestamp).toLocaleTimeString();
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

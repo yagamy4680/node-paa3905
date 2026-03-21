@@ -217,6 +217,51 @@ LightMode.SUPERLOW        // >5 lux, 50 fps
 LightMode.UNKNOWN         // Undetermined
 ```
 
+## Web Demo - Real-time Frame Streaming
+
+The library includes a comprehensive web demo that streams live infrared images from the PAA3905 sensor to a web browser using Socket.IO and Express.
+
+### Features
+
+- **Real-time streaming**: Live 35×35 pixel infrared images at adjustable frame rates
+- **Interactive web interface**: Canvas-based display with zoom, contrast, and binary mode controls
+- **Pixel inspection**: Click or hover to inspect individual pixel values
+- **Statistics monitoring**: Frame rate, capture time, and image statistics
+- **Auto-contrast**: Automatic contrast adjustment for better visibility
+- **Binary threshold**: Convert to binary image with adjustable threshold
+
+![Web Demo Interface](doc/demo-frame-web.png)
+*Real-time web interface showing live infrared sensor data with interactive controls and pixel inspection*
+
+### Quick Start
+
+```bash
+# Install additional dependencies for web demo
+npm install express socket.io
+
+# Start the web server (adjust SPI device path in demo-frame-web.js)
+npm run demo:web
+
+# Open browser to http://localhost:3000
+```
+
+### Configuration
+
+Edit `demo-frame-web.js` to configure:
+- `SPI_DEVICE`: Path to your SPI device (e.g., `/dev/spidev1.1`)
+- `FRAME_RATE`: Target streaming frame rate (default: 10 FPS)
+- `PORT`: Web server port (default: 3000)
+
+### Web Interface Controls
+
+- **Scale Slider**: Adjust canvas zoom from 2x to 20x
+- **Binary Threshold**: Convert image to black/white with adjustable threshold
+- **Binary Mode**: Toggle binary/grayscale display
+- **Auto Contrast**: Automatically stretch contrast for better visibility
+- **Pixel Inspector**: Mouse over canvas to see pixel coordinates and values
+
+The web interface automatically handles multiple clients and starts/stops frame capture based on connected browsers.
+
 ## Testing
 
 The library includes comprehensive test files:
