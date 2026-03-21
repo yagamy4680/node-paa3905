@@ -150,6 +150,34 @@ export class PAA3905 {
         throw new Error('initMode() must be implemented by subclass');
     }
 
+    async setMode(mode, autoMode) {
+        // reset();
+        switch(mode) {
+            case DetectionMode.STANDARD: // standard detection
+                await this.standardDetection();
+                break;
+
+            case DetectionMode.ENHANCED: // enhanced detection
+                await this.enhancedDetection();
+                break;
+            
+            default:
+                throw new Error(`Unknown detection mode: ${mode}`);
+        }
+
+        if (autoMode == AutoMode.AUTO_012){
+            await this.writeByteDelay(0x7F, 0x08);
+            await this.writeByteDelay(0x68, 0x02);
+            await this.writeByteDelay(0x7F, 0x00);
+        }
+        else
+        {
+            await this.writeByteDelay(0x7F, 0x08);
+            await this.writeByteDelay(0x68, 0x01);
+            await this.writeByteDelay(0x7F, 0x00);
+        }
+    }
+
     /**
      * Write a byte to a register
      * @param {number} reg - Register address
@@ -161,7 +189,6 @@ export class PAA3905 {
             tx_buf: txBuffer,
             delay_usecs: 1
         }]);
-        await this._delay(0.001); // 1 microsecond
     }
 
     /**
@@ -171,7 +198,7 @@ export class PAA3905 {
      */
     async writeByteDelay(reg, value) {
         await this.writeByte(reg, value);
-        await this._delay(0.011); // 11 microseconds
+        this.wait_microseconds(11); // 11 microsecond delay after write
     }
 
     /**
@@ -185,7 +212,7 @@ export class PAA3905 {
             tx_buf: txBuffer,
             delay_usecs: 2
         }]);
-        await this._delay(0.001); // 1 microsecond
+        this.wait_microseconds(1); // 1 microsecond delay after read
         return rxBuffer[1]; // Second byte contains the response
     }
 
@@ -194,7 +221,12 @@ export class PAA3905 {
      */
     async reset() {
         await this.writeByte(PAA3905.REGISTERS.POWER_UP_RESET, 0x5A);
-        await this._delay(1); // 1ms delay after reset
+        console.log('Sensor reset command sent, waiting for sensor to reboot...');
+        await this._delay(1000); // 1s delay after reset
+        for (let i = 0; i < 5; i++) {
+            await this.readByte(PAA3905.REGISTERS.MOTION + i); // Clear motion burst data
+            this.wait_microseconds(2); // 2 microseconds between reads
+        }
     }
 
     /**
@@ -261,6 +293,20 @@ export class PAA3905 {
     }
 
     /**
+     * Busy-loop to wait in microseconds
+     * @param {number} us - Delay in microseconds
+     */
+    wait_microseconds(us) {
+        const start = process.hrtime();
+        let end;
+        do {
+            end = process.hrtime(start);
+            // end[0] is seconds, end[1] is nanoseconds
+            // 1000 nanoseconds = 1 microsecond
+        } while (end[0] * 1e9 + end[1] < us * 1000);
+    }
+
+    /**
      * Close SPI device (cleanup)
      */
     close() {
@@ -269,4 +315,142 @@ export class PAA3905 {
             this.spi = null;
         }
     }
+
+    // // Performance optimization registers for the three different modes
+    async standardDetection() {
+        await this.writeByteDelay(0x7F, 0x00); // 1
+        await this.writeByteDelay(0x51, 0xFF);
+        await this.writeByteDelay(0x4E, 0x2A);
+        await this.writeByteDelay(0x66, 0x3E);
+        await this.writeByteDelay(0x7F, 0x14);
+        await this.writeByteDelay(0x7E, 0x71);
+        await this.writeByteDelay(0x55, 0x00);
+        await this.writeByteDelay(0x59, 0x00);
+        await this.writeByteDelay(0x6F, 0x2C);
+        await this.writeByteDelay(0x7F, 0x05); // 10
+        
+        await this.writeByteDelay(0x4D, 0xAC); // 11
+        await this.writeByteDelay(0x4E, 0x32);
+        await this.writeByteDelay(0x7F, 0x09);
+        await this.writeByteDelay(0x5C, 0xAF);
+        await this.writeByteDelay(0x5F, 0xAF);
+        await this.writeByteDelay(0x70, 0x08);
+        await this.writeByteDelay(0x71, 0x04);
+        await this.writeByteDelay(0x72, 0x06);
+        await this.writeByteDelay(0x74, 0x3C);
+        await this.writeByteDelay(0x75, 0x28); // 20
+        
+        await this.writeByteDelay(0x76, 0x20); //  21
+        await this.writeByteDelay(0x4E, 0xBF);
+        await this.writeByteDelay(0x7F, 0x03);
+        await this.writeByteDelay(0x64, 0x14);
+        await this.writeByteDelay(0x65, 0x0A);
+        await this.writeByteDelay(0x66, 0x10);
+        await this.writeByteDelay(0x55, 0x3C);
+        await this.writeByteDelay(0x56, 0x28);
+        await this.writeByteDelay(0x57, 0x20);
+        await this.writeByteDelay(0x4A, 0x2D); // 30
+        
+        await this.writeByteDelay(0x4B, 0x2D); // 31
+        await this.writeByteDelay(0x4E, 0x4B);
+        await this.writeByteDelay(0x69, 0xFA);
+        await this.writeByteDelay(0x7F, 0x05);
+        await this.writeByteDelay(0x69, 0x1F);
+        await this.writeByteDelay(0x47, 0x1F);
+        await this.writeByteDelay(0x48, 0x0C);
+        await this.writeByteDelay(0x5A, 0x20);
+        await this.writeByteDelay(0x75, 0x0F);
+        await this.writeByteDelay(0x4A, 0x0F);  // 40
+        
+        await this.writeByteDelay(0x42, 0x02);  // 41
+        await this.writeByteDelay(0x45, 0x03);
+        await this.writeByteDelay(0x65, 0x00);
+        await this.writeByteDelay(0x67, 0x76);
+        await this.writeByteDelay(0x68, 0x76);
+        await this.writeByteDelay(0x6A, 0xC5);
+        await this.writeByteDelay(0x43, 0x00);
+        await this.writeByteDelay(0x7F, 0x06);
+        await this.writeByteDelay(0x4A, 0x18);
+        await this.writeByteDelay(0x4B, 0x0C); // 50
+        
+        await this.writeByteDelay(0x4C, 0x0C); // 51 
+        await this.writeByteDelay(0x4D, 0x0C);  
+        await this.writeByteDelay(0x46, 0x0A);
+        await this.writeByteDelay(0x59, 0xCD);
+        await this.writeByteDelay(0x7F, 0x0A);
+        await this.writeByteDelay(0x4A, 0x2A);
+        await this.writeByteDelay(0x48, 0x96);
+        await this.writeByteDelay(0x52, 0xB4);
+        await this.writeByteDelay(0x7F, 0x00);
+        await this.writeByteDelay(0x5B, 0xA0); // 60
+    }
+
+    async enhancedDetection() {
+        await this.writeByteDelay(0x7F, 0x00); // 1
+        await this.writeByteDelay(0x51, 0xFF);
+        await this.writeByteDelay(0x4E, 0x2A);
+        await this.writeByteDelay(0x66, 0x26);
+        await this.writeByteDelay(0x7F, 0x14);
+        await this.writeByteDelay(0x7E, 0x71);
+        await this.writeByteDelay(0x55, 0x00);
+        await this.writeByteDelay(0x59, 0x00);
+        await this.writeByteDelay(0x6F, 0x2C);
+        await this.writeByteDelay(0x7F, 0x05); // 10
+        
+        await this.writeByteDelay(0x4D, 0xAC); // 11
+        await this.writeByteDelay(0x4E, 0x65);
+        await this.writeByteDelay(0x7F, 0x09);
+        await this.writeByteDelay(0x5C, 0xAF);
+        await this.writeByteDelay(0x5F, 0xAF);
+        await this.writeByteDelay(0x70, 0x00);
+        await this.writeByteDelay(0x71, 0x00);
+        await this.writeByteDelay(0x72, 0x00);
+        await this.writeByteDelay(0x74, 0x14);
+        await this.writeByteDelay(0x75, 0x14); // 20
+        
+        await this.writeByteDelay(0x76, 0x06); //  21
+        await this.writeByteDelay(0x4E, 0x8F);
+        await this.writeByteDelay(0x7F, 0x03);
+        await this.writeByteDelay(0x64, 0x00);
+        await this.writeByteDelay(0x65, 0x00);
+        await this.writeByteDelay(0x66, 0x00);
+        await this.writeByteDelay(0x55, 0x14);
+        await this.writeByteDelay(0x56, 0x14);
+        await this.writeByteDelay(0x57, 0x06);
+        await this.writeByteDelay(0x4A, 0x20); // 30
+        
+        await this.writeByteDelay(0x4B, 0x20); // 31
+        await this.writeByteDelay(0x4E, 0x32);
+        await this.writeByteDelay(0x69, 0xFE);
+        await this.writeByteDelay(0x7F, 0x05);
+        await this.writeByteDelay(0x69, 0x14);
+        await this.writeByteDelay(0x47, 0x14);
+        await this.writeByteDelay(0x48, 0x1C);
+        await this.writeByteDelay(0x5A, 0x20);
+        await this.writeByteDelay(0x75, 0xE5);
+        await this.writeByteDelay(0x4A, 0x05);  // 40
+
+        await this.writeByteDelay(0x42, 0x04);  // 41
+        await this.writeByteDelay(0x45, 0x03);
+        await this.writeByteDelay(0x65, 0x00);
+        await this.writeByteDelay(0x67, 0x50);
+        await this.writeByteDelay(0x68, 0x50);
+        await this.writeByteDelay(0x6A, 0xC5);
+        await this.writeByteDelay(0x43, 0x00);
+        await this.writeByteDelay(0x7F, 0x06);
+        await this.writeByteDelay(0x4A, 0x1E);
+        await this.writeByteDelay(0x4B, 0x1E); // 50
+        
+        await this.writeByteDelay(0x4C, 0x34); // 51 
+        await this.writeByteDelay(0x4D, 0x34);  
+        await this.writeByteDelay(0x46, 0x32);
+        await this.writeByteDelay(0x59, 0x0D);
+        await this.writeByteDelay(0x7F, 0x0A);
+        await this.writeByteDelay(0x4A, 0x2A);
+        await this.writeByteDelay(0x48, 0x96);
+        await this.writeByteDelay(0x52, 0xB4);
+        await this.writeByteDelay(0x7F, 0x00);
+        await this.writeByteDelay(0x5B, 0xA0); // 60
+    }
+
 }

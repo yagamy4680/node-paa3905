@@ -1,4 +1,4 @@
-import { PAA3905, Orientation } from './PAA3905.js';
+import { PAA3905, Orientation, DetectionMode, AutoMode } from './PAA3905.js';
 
 /**
  * PAA3905 Frame Capture class
@@ -35,23 +35,7 @@ export class PAA3905_FrameCapture extends PAA3905 {
      */
     async initMode() {
         // Frame capture mode initialization
-        await this.writeByteDelay(0x7F, 0x07);
-        await this.writeByteDelay(0x41, 0x1D);
-        await this.writeByteDelay(0x43, 0x00);
-        await this.writeByteDelay(0x4B, 0x00);
-        await this.writeByteDelay(0x45, 0x6F);
-        await this.writeByteDelay(0x44, 0x42);
-        await this.writeByteDelay(0x4C, 0x80);
-        await this.writeByteDelay(0x7F, 0x08);
-        await this.writeByteDelay(0x6A, 0x38);
-        await this.writeByteDelay(0x7F, 0x00);
-        await this.writeByteDelay(0x55, 0x04);
-        await this.writeByteDelay(0x50, 0x07);
-        await this.writeByteDelay(0x7F, 0x14);
-        await this.writeByteDelay(0x65, 0x60);
-        await this.writeByteDelay(0x66, 0x08);
-        await this.writeByteDelay(0x7F, 0x00);
-        await this.writeByteDelay(0x48, 0xFF);
+        await this.setMode(DetectionMode.STANDARD, AutoMode.AUTO_01); // Set to frame capture mode
     }
 
     /**
@@ -60,7 +44,8 @@ export class PAA3905_FrameCapture extends PAA3905 {
      */
     async frameReady() {
         const status = await this.readByte(PAA3905_FrameCapture.FRAME_REGISTERS.RAWDATA_GRAB_STATUS);
-        return (status & 0x40) !== 0;
+        console.log(`   🔍 Frame grab status: 0x${status.toString(16).toUpperCase()}`);
+        return (status & 0x01) !== 0;
     }
 
     /**
@@ -91,6 +76,21 @@ export class PAA3905_FrameCapture extends PAA3905 {
             throw new Error(`Target array too small. Expected ${PAA3905_FrameCapture.FRAME_SIZE}, got ${frameArray.length}`);
         }
 
+        // make sure not in superlowlight mode for frame capture
+        console.log(`⚙️  Setting mode for frame capture... (STANDARD + AUTO_01)`);
+        await this.setMode(DetectionMode.STANDARD, AutoMode.AUTO_01);
+
+        console.log(`⚙️  Configuring sensor for frame capture...`);
+        await this.writeByteDelay(0x7F, 0x00);
+        await this.writeByteDelay(0x67, 0x25);
+        await this.writeByteDelay(0x55, 0x20);
+        await this.writeByteDelay(0x7F, 0x13);
+        await this.writeByteDelay(0x42, 0x01);
+        await this.writeByteDelay(0x7F, 0x00);
+        await this.writeByteDelay(0x0F, 0x11);
+        await this.writeByteDelay(0x0F, 0x13);
+        await this.writeByteDelay(0x0F, 0x11);
+
         try {
             // Wait for frame to be ready
             if (!(await this.waitForFrame())) {
@@ -106,7 +106,7 @@ export class PAA3905_FrameCapture extends PAA3905 {
                 
                 // Small delay between pixel reads for stability
                 if (i % 35 === 0 && i > 0) {
-                    await this._delay(0.01); // 10 microseconds every row
+                    this.wait_microseconds(10); // 10 microseconds every row
                 }
             }
 
