@@ -1,6 +1,40 @@
 # PAA3905 Node.js Library
 
-A Node.js library for the PAA3905 optical flow sensor, ported from the original Arduino library by Simon D. Levy. This library provides motion detection and raw image capture capabilities using SPI communication.
+A Node.js library for the PAA3905 optical flow sensor, ported from the original Arduino library by [Simon D. Levy](https://github.com/simondlevy/PAA3905). This library provides motion detection and raw image capture capabilities using SPI communication.
+
+## Table of Contents
+
+- [Features](#features)
+- [Hardware Requirements](#hardware-requirements)
+- [Installation](#installation)
+  - [1. Install the Library](#1-install-the-library)
+  - [2. Enable SPI](#2-enable-spi)
+  - [3. Configure Permissions](#3-configure-permissions)
+- [Hardware Connections](#hardware-connections)
+- [Basic Usage](#basic-usage)
+  - [Motion Capture](#motion-capture)
+  - [Frame Capture](#frame-capture)
+- [API Reference](#api-reference)
+  - [PAA3905_MotionCapture](#paa3905_motioncapture)
+  - [PAA3905_FrameCapture](#paa3905_framecapture)
+  - [Configuration Constants](#configuration-constants)
+- [Web Demo - Real-time Frame Streaming](#web-demo---real-time-frame-streaming)
+  - [Features](#features-1)
+  - [Quick Start](#quick-start)
+  - [Configuration](#configuration)
+  - [Web Interface Controls](#web-interface-controls)
+- [Testing](#testing)
+  - [Basic Connection Test](#basic-connection-test)
+  - [Motion Capture Test](#motion-capture-test)
+  - [Frame Capture Test](#frame-capture-test)
+- [Performance Specifications](#performance-specifications)
+- [Troubleshooting](#troubleshooting)
+  - [Permission Denied](#permission-denied)
+  - [No SPI Devices](#no-spi-devices)
+  - [Sensor Not Detected](#sensor-not-detected)
+  - [Poor Motion Data Quality](#poor-motion-data-quality)
+- [License](#license)
+- [Credits](#credits)
 
 ## Features
 
@@ -14,8 +48,8 @@ A Node.js library for the PAA3905 optical flow sensor, ported from the original 
 
 ## Hardware Requirements
 
-- Linux-based system (Raspberry Pi, Orange Pi, etc.)
-- PAA3905 optical flow sensor module
+- Linux-based system (Raspberry Pi, etc.)
+- PAA3905 optical flow sensor module (e.g. [PAA3905 Breakout Board](https://www.tindie.com/products/onehorse/paa3905-optical-flow-camera/))
 - SPI interface enabled
 - Node.js 20+ with build tools
 
@@ -36,10 +70,19 @@ sudo raspi-config
 # Navigate to Interface Options > SPI > Enable
 ```
 
-**Orange Pi:**
+Or if you'd like to enable SPI1 instead of SPI0, please comment out the following line in `/boot/config.txt`:
 ```bash
-sudo orangepi-config
-# Navigate to System > Hardware > Toggle SPI configuration
+# dtparam=spi=on
+```
+
+And add the following lines to enable SPI1, with GPIO18 as CS0 (`SPI1-CEO-N`) while GPIO17 as CS1 (`SPI1-CE1-N`):
+```bash
+dtoverlay=spi1-2cs
+```
+
+After making these changes, reboot your Raspberry Pi for the new SPI configuration to take effect. You can verify that SPI is enabled and the devices are available by running:
+```bash
+ls -l /dev/spidev*
 ```
 
 ### 3. Configure Permissions
@@ -66,14 +109,30 @@ sudo usermod -aG spi $(whoami)
 
 ## Hardware Connections
 
-| PAA3905 Pin | Raspberry Pi | Orange Pi | Description |
-|-------------|--------------|-----------|-------------|
-| MOSI        | GPIO10       | MOSI      | Data out |
-| MISO        | GPIO9        | MISO      | Data in |
-| SCLK        | GPIO11       | SCLK      | Clock |
-| CS          | GPIO8 (CE0)  | CS        | Chip select |
-| VCC         | 3.3V         | 3.3V      | Power |
-| GND         | GND          | GND       | Ground |
+Connect PAA3905 to `SPI0` of Raspberry Pi as follows:
+
+| PAA3905 Pin | Raspberry Pi | Description |
+|-------------|--------------|-------------|
+| MOSI        | GPIO10       | Data out |
+| MISO        | GPIO9        | Data in |
+| SCLK        | GPIO11       | Clock |
+| CS          | GPIO8 (CE0)  | Chip select |
+| VCC         | 3.3V         | Power |
+| GND         | GND          | Ground |
+
+Or connect PAA3905 to `SPI1` with GPIO17 as CS1:
+
+| PAA3905 Pin | Raspberry Pi | Description |
+|-------------|--------------|-------------|
+| MOSI        | GPIO20       | Data out |
+| MISO        | GPIO19       | Data in |
+| SCLK        | GPIO21       | Clock |
+| CS          | GPIO17 (CE1) | Chip select |
+| VCC         | 3.3V         | Power |
+| GND         | GND          | Ground |
+
+In the first example, the SPI device path will be `/dev/spidev0.0`. In the second example, it will be `/dev/spidev1.1`.
+
 
 ## Basic Usage
 
@@ -162,7 +221,7 @@ captureImage().catch(console.error);
 new PAA3905_MotionCapture(device, detectionMode, autoMode, orientation, resolution)
 
 // Methods
-await sensor.begin()                    // Initialize sensor
+await sensor.begin()                   // Initialize sensor
 await sensor.readBurstMode()           // Read motion data
 sensor.motionDataAvailable()           // Check if motion data ready
 sensor.getDeltaX() / getDeltaY()       // Get motion deltas
@@ -181,7 +240,7 @@ sensor.close()                         // Cleanup
 new PAA3905_FrameCapture(device, orientation, resolution)
 
 // Methods
-await camera.begin()                   // Initialize sensor
+await camera.begin()                  // Initialize sensor
 await camera.captureFrame(array?)     // Capture 35x35 frame
 await camera.captureFrameWithStats()  // Capture with statistics
 await camera.frameReady()             // Check if frame is ready
@@ -323,7 +382,6 @@ ls -l /dev/spi*
 
 # Enable SPI in system configuration
 # Raspberry Pi: raspi-config
-# Orange Pi: orangepi-config
 ```
 
 ### Sensor Not Detected
