@@ -1,0 +1,37 @@
+{
+  "name": "paa3905-nodejs",
+  "version": "1.0.0",
+  "description": "Node.js library for PAA3905 optical flow sensor using io-spi",
+  "main": "src/PAA3905.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test/test_motion.js",
+    "test:frame": "node test/test_frame.js",
+    "test:basic": "node test/test_basic.js",
+    "demo": "node demo.js",
+    "demo:motion": "node demo.js --motion",
+    "demo:image": "node demo.js --image",
+    "demo:monitor": "node demo.js --monitor"
+  },
+  "keywords": [
+    "paa3905",
+    "optical-flow",
+    "spi",
+    "sensor",
+    "motion-tracking",
+    "nodejs"
+  ],
+  "author": "Generated from Arduino library by Simon D. Levy",
+  "license": "MIT",
+  "dependencies": {
+    "@eeemarv/io-spi": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github:simondlevy/PAA3905"
+  },
+  "homepage": "https://github.com/simondlevy/PAA3905"
+}
