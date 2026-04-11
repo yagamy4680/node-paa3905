@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { PAA3905_FrameCapture, Orientation } from './src/index.js';
+import { OpticalFlowNative } from './src/OpticalFlowNative.js';
 
 // Configuration
 const PORT = 3000;
@@ -27,6 +28,7 @@ const io = new SocketIOServer(server);
 
 // Global variables
 let frameCapture = null;
+let opticalFlow = null;
 let isCapturing = false;
 let connectedClients = 0;
 let frameStats = {
@@ -57,6 +59,11 @@ async function initializeSensor() {
         
         console.log('✅ PAA3905 sensor initialized successfully');
         console.log(`📏 Resolution: ${frameCapture.getResolution()} CPM`);
+
+        // Initialize optical flow calculator
+        opticalFlow = new OpticalFlowNative();
+        console.log('✅ Optical flow calculator initialized (PX4 block-matching, 35x35)');
+
         return true;
         
     } catch (error) {
@@ -99,6 +106,16 @@ async function captureAndBroadcast() {
             captureTime: captureTime,
             frameNumber: frameStats.totalFrames
         };
+
+        // Compute optical flow between consecutive frames
+        if (opticalFlow) {
+            const flow = opticalFlow.computeFlow(result.frameData);
+            frameData.opticalFlow = {
+                flowX: flow.flowX,
+                flowY: flow.flowY,
+                quality: flow.quality
+            };
+        }
         
         // Broadcast to all connected clients
         io.emit('frame-data', frameData);
@@ -107,7 +124,10 @@ async function captureAndBroadcast() {
         if (frameStats.totalFrames % 50 === 0) {
             const uptime = (Date.now() - frameStats.startTime) / 1000;
             const fps = frameStats.totalFrames / uptime;
-            console.log(`📊 Frame ${frameStats.totalFrames}: ${captureTime}ms capture, ${fps.toFixed(1)} fps avg`);
+            const flowInfo = frameData.opticalFlow
+                ? ` | flow=(${frameData.opticalFlow.flowX.toFixed(2)}, ${frameData.opticalFlow.flowY.toFixed(2)}) q=${frameData.opticalFlow.quality}`
+                : '';
+            console.log(`📊 Frame ${frameStats.totalFrames}: ${captureTime}ms capture, ${fps.toFixed(1)} fps avg${flowInfo}`);
         }
         
     } catch (error) {

@@ -188,6 +188,30 @@
                         <span id="pixelValue">-</span>
                     </div>
                 </div>
+
+                <h4>🧭 Optical Flow</h4>
+                <div id="opticalFlowStats">
+                    <div class="stat-item">
+                        <span>Flow X:</span>
+                        <span id="flowX">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Flow Y:</span>
+                        <span id="flowY">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Quality:</span>
+                        <span id="flowQuality">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Direction:</span>
+                        <span id="flowDirection">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span>Magnitude:</span>
+                        <span id="flowMagnitude">-</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -222,7 +246,12 @@
             dynamicRange: document.getElementById('dynamicRange'),
             lastUpdate: document.getElementById('lastUpdate'),
             mousePos: document.getElementById('mousePos'),
-            pixelValue: document.getElementById('pixelValue')
+            pixelValue: document.getElementById('pixelValue'),
+            flowX: document.getElementById('flowX'),
+            flowY: document.getElementById('flowY'),
+            flowQuality: document.getElementById('flowQuality'),
+            flowDirection: document.getElementById('flowDirection'),
+            flowMagnitude: document.getElementById('flowMagnitude')
         };
         
         // Initialize
@@ -371,6 +400,39 @@
                     ctx.fillRect(x * scale, y * scale, scale, scale);
                 }
             }
+
+            // Draw optical flow arrow overlay
+            if (currentFrame.opticalFlow && currentFrame.opticalFlow.quality > 0) {
+                const flow = currentFrame.opticalFlow;
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const arrowScale = scale * 3; // Scale flow vector for visibility
+                const endX = centerX + flow.flowX * arrowScale;
+                const endY = centerY + flow.flowY * arrowScale;
+
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+
+                // Arrowhead
+                const angle = Math.atan2(flow.flowY, flow.flowX);
+                const headLen = 8;
+                ctx.beginPath();
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle - 0.4), endY - headLen * Math.sin(angle - 0.4));
+                ctx.moveTo(endX, endY);
+                ctx.lineTo(endX - headLen * Math.cos(angle + 0.4), endY - headLen * Math.sin(angle + 0.4));
+                ctx.stroke();
+
+                // Center dot
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
         
         // Update statistics display
@@ -395,6 +457,24 @@
             elements.avgPixel.textContent = frameData.statistics.average.toFixed(1);
             elements.dynamicRange.textContent = frameData.statistics.max - frameData.statistics.min;
             elements.lastUpdate.textContent = new Date(frameData.timestamp).toLocaleTimeString();
+
+            // Update optical flow display
+            if (frameData.opticalFlow) {
+                const flow = frameData.opticalFlow;
+                elements.flowX.textContent = flow.flowX.toFixed(3) + ' px';
+                elements.flowY.textContent = flow.flowY.toFixed(3) + ' px';
+                elements.flowQuality.textContent = flow.quality + ' / 255';
+
+                const mag = Math.sqrt(flow.flowX * flow.flowX + flow.flowY * flow.flowY);
+                elements.flowMagnitude.textContent = mag.toFixed(3) + ' px';
+
+                if (mag > 0.01) {
+                    const deg = Math.atan2(flow.flowY, flow.flowX) * 180 / Math.PI;
+                    elements.flowDirection.textContent = deg.toFixed(1) + '°';
+                } else {
+                    elements.flowDirection.textContent = 'stationary';
+                }
+            }
         }
         
         // Initialize when page loads

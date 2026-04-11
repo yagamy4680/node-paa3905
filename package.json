@@ -5,15 +5,21 @@
   "main": "src/PAA3905.js",
   "type": "module",
   "scripts": {
+    "install": "node-gyp rebuild",
+    "build": "node-gyp rebuild",
+    "build:debug": "node-gyp rebuild --debug",
+    "clean": "node-gyp clean",
     "test": "node test/test_motion.js",
     "test:frame": "node test/test_frame.js",
     "test:basic": "node test/test_basic.js",
+    "test:flow": "node test/test_optical_flow.js",
     "demo": "node demo.js",
     "demo:motion": "node demo.js --motion",
     "demo:image": "node demo.js --image",
     "demo:monitor": "node demo.js --monitor",
     "demo:web": "node demo-frame-web.js"
   },
+  "gypfile": true,
   "keywords": [
     "paa3905",
     "optical-flow",
@@ -25,7 +31,8 @@
   "author": "Generated from Arduino library by Simon D. Levy",
   "license": "MIT",
   "dependencies": {
-    "@eeemarv/io-spi": "^0.2.8"
+    "@eeemarv/io-spi": "^0.2.8",
+    "node-addon-api": "^8.7.0"
   },
   "devDependencies": {
     "express": "^4.18.2",

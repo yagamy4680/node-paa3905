@@ -23,6 +23,9 @@ export { PAA3905_MotionCapture } from './PAA3905_MotionCapture.js';
 // Export frame capture class
 export { PAA3905_FrameCapture } from './PAA3905_FrameCapture.js';
 
+// Export optical flow native addon wrapper
+export { OpticalFlowNative } from './OpticalFlowNative.js';
+
 // Define version
 export const version = '1.0.0';
 
