@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { writeFileSync, appendFileSync, existsSync, mkdirSync } from 'fs';
 import { PAA3905_FrameCapture, Orientation } from './src/index.js';
 import { OpticalFlowNative } from './src/OpticalFlowNative.js';
 
@@ -37,6 +38,17 @@ let frameStats = {
     startTime: Date.now(),
     lastCaptureTime: 0,
     avgCaptureTime: 0
+};
+
+// Recording state
+let isRecording = false;
+let recordingTimeout = null;
+let recordingStats = {
+    frameCount: 0,
+    recordingId: 0,
+    startTime: 0,
+    directory: '/tmp',
+    csvFilePath: ''
 };
 
 /**
@@ -115,6 +127,37 @@ async function captureAndBroadcast() {
                 flowY: flow.flowY,
                 quality: flow.quality
             };
+            
+            // Save to files if recording
+            if (isRecording) {
+                try {
+                    // Save frame as raw file
+                    const frameFilePath = saveFrameToFile(
+                        result.frameData, 
+                        recordingStats.directory, 
+                        captureEndTime
+                    );
+                    
+                    // Append optical flow data to CSV
+                    recordingStats.frameCount++;
+                    appendToCsv(
+                        recordingStats.csvFilePath,
+                        recordingStats.frameCount,
+                        captureEndTime,
+                        flow.flowX,
+                        flow.flowY,
+                        flow.quality
+                    );
+                    
+                    // Log every 10 frames during recording
+                    if (recordingStats.frameCount % 10 === 0) {
+                        console.log(`📹 Recorded frame ${recordingStats.frameCount}: ${frameFilePath}`);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Failed to save recording data:', error.message);
+                }
+            }
         }
         
         // Broadcast to all connected clients
@@ -175,6 +218,146 @@ function stopCapture() {
     isCapturing = false;
 }
 
+/**
+ * Save frame data as raw file
+ */
+function saveFrameToFile(frameData, directory, timestamp) {
+    try {
+        // Ensure directory exists
+        if (!existsSync(directory)) {
+            mkdirSync(directory, { recursive: true });
+        }
+        
+        const filename = `paa3905-${timestamp}.raw`;
+        const filepath = join(directory, filename);
+        
+        // Write raw frame data (35x35 pixels)
+        writeFileSync(filepath, frameData);
+        
+        return filepath;
+    } catch (error) {
+        console.error('❌ Failed to save frame:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Initialize or append to CSV file
+ */
+function initializeCsvFile(directory) {
+    try {
+        // Ensure directory exists
+        if (!existsSync(directory)) {
+            mkdirSync(directory, { recursive: true });
+        }
+        
+        const csvPath = join(directory, 'paa3905-optical-flow.csv');
+        
+        // Write header if file doesn't exist
+        if (!existsSync(csvPath)) {
+            const header = 'id,timestamp,flow-x,flow-y,quality\n';
+            writeFileSync(csvPath, header);
+        }
+        
+        return csvPath;
+    } catch (error) {
+        console.error('❌ Failed to initialize CSV file:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Append optical flow data to CSV
+ */
+function appendToCsv(csvPath, id, timestamp, flowX, flowY, quality) {
+    try {
+        const paddedId = id.toString().padStart(5, '0');
+        const formattedFlowX = flowX.toFixed(4);
+        const formattedFlowY = flowY.toFixed(4);
+        const row = `${paddedId},${timestamp},${formattedFlowX},${formattedFlowY},${quality}\n`;
+        
+        appendFileSync(csvPath, row);
+    } catch (error) {
+        console.error('❌ Failed to append to CSV:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Start recording frames and optical flow data
+ */
+async function startRecording(directory = '/tmp', timeoutSeconds = 10) {
+    if (isRecording) {
+        throw new Error('Recording already in progress');
+    }
+    
+    if (!frameCapture || !opticalFlow) {
+        throw new Error('Sensor not initialized');
+    }
+    
+    console.log(`📹 Starting recording to directory: ${directory}`);
+    
+    // Initialize recording state
+    isRecording = true;
+    recordingStats.frameCount = 0;
+    recordingStats.recordingId++;
+    recordingStats.startTime = Date.now();
+    recordingStats.directory = directory;
+    
+    // Initialize CSV file
+    recordingStats.csvFilePath = initializeCsvFile(directory);
+    
+    // Set timeout if specified
+    if (timeoutSeconds > 0) {
+        recordingTimeout = setTimeout(() => {
+            console.log(`⏰ Recording timeout (${timeoutSeconds}s) reached, stopping...`);
+            stopRecording();
+        }, timeoutSeconds * 1000);
+    }
+    
+    console.log(`✅ Recording started (timeout: ${timeoutSeconds > 0 ? timeoutSeconds + 's' : 'none'})`);
+    
+    return {
+        message: 'Recording started',
+        directory: directory,
+        timeout: timeoutSeconds,
+        recordingId: recordingStats.recordingId
+    };
+}
+
+/**
+ * Stop recording and flush data
+ */
+function stopRecording() {
+    if (!isRecording) {
+        return {
+            message: 'No recording in progress',
+            framesCaptured: 0
+        };
+    }
+    
+    isRecording = false;
+    
+    // Clear timeout
+    if (recordingTimeout) {
+        clearTimeout(recordingTimeout);
+        recordingTimeout = null;
+    }
+    
+    const duration = Date.now() - recordingStats.startTime;
+    const frameCount = recordingStats.frameCount;
+    
+    console.log(`🛑 Recording stopped. Captured ${frameCount} frames in ${duration}ms`);
+    
+    return {
+        message: 'Recording stopped',
+        framesCaptured: frameCount,
+        duration: duration,
+        directory: recordingStats.directory,
+        csvFile: recordingStats.csvFilePath
+    };
+}
+
 // Serve static files and web interface
 app.use(express.static('public'));
 app.use(express.static('assets'));
@@ -182,6 +365,46 @@ app.use(express.static('assets'));
 // Main web interface route
 app.get('/', (req, res) => {
     res.sendFile(join(__dirname, 'assets', 'demo-frame-web', 'index.html'));
+});
+
+// REST API endpoints for recording
+app.get('/api/v1/recording/start', async (req, res) => {
+    try {
+        const directory = req.query.dir || '/tmp';
+        const timeoutParam = req.query.timeout || '10';
+        const timeout = timeoutParam === '-1' ? -1 : parseInt(timeoutParam, 10);
+        
+        if (isNaN(timeout) && timeout !== -1) {
+            return res.status(400).json({
+                error: 'Invalid timeout parameter',
+                message: 'Timeout must be a number or -1 for no timeout'
+            });
+        }
+        
+        const result = await startRecording(directory, timeout);
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ Start recording API error:', error.message);
+        res.status(500).json({
+            error: 'Failed to start recording',
+            message: error.message
+        });
+    }
+});
+
+app.get('/api/v1/recording/stop', (req, res) => {
+    try {
+        const result = stopRecording();
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ Stop recording API error:', error.message);
+        res.status(500).json({
+            error: 'Failed to stop recording',
+            message: error.message
+        });
+    }
 });
 
 // Socket.IO connection handling
