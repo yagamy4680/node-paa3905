@@ -1,0 +1,5 @@
+# Requirements for PAA3905 Tools
+
+# Image processing and conversion
+Pillow>=10.0.0
+numpy>=1.24.0
